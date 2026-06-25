@@ -1,41 +1,87 @@
-git HELP.md
-.gradle
+# =========================
+# Gradle / Spring Boot
+# =========================
+.gradle/
 build/
+out/
+
+# Gradle Wrapper는 반드시 포함
 !gradle/wrapper/gradle-wrapper.jar
+
+# 혹시 src 내부에 build/out/bin 폴더를 의도적으로 둘 경우 예외
 !**/src/main/**/build/
 !**/src/test/**/build/
-
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
+!**/src/main/**/out/
+!**/src/test/**/out/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
 
-### IntelliJ IDEA ###
-.idea
+
+# =========================
+# IDE - STS / Eclipse
+# =========================
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+bin/
+
+
+# =========================
+# IDE - IntelliJ IDEA
+# =========================
+.idea/
 *.iws
 *.iml
 *.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
 
-### NetBeans ###
+
+# =========================
+# IDE - VS Code
+# =========================
+.vscode/
+
+
+# =========================
+# NetBeans
+# =========================
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
 
-### VS Code ###
-.vscode/
 
-### Frontend ###
+# =========================
+# Frontend
+# =========================
 frontend/node_modules/
 frontend/dist/
+
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+
+# =========================
+# Env / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
