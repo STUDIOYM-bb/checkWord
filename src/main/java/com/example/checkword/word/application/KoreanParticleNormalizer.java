@@ -14,54 +14,38 @@ final class KoreanParticleNormalizer {
 		"을지로"
 	);
 
+	private static final Set<String> CONTEXT_REQUIRED_PARTICLES = Set.of(
+		"이", "가", "의", "에", "로", "도", "만"
+	);
+
 	private static final List<String> PARTICLES = List.of(
-		"으로부터는", "으로부터도", "으로까지는", "으로까지도",
-		"에게서는", "에게서도", "한테서는", "한테서도", "께서는",
-		"에서부터", "에서까지", "에서보다", "으로부터", "으로까지",
-		"에게서", "한테서", "에서는", "에서도", "에게는", "에게도", "한테는", "한테도",
-		"까지는", "까지도", "부터는", "부터도", "밖에는", "밖에도", "보다는", "보다도",
-		"처럼은", "처럼도", "같이는", "같이도", "만큼은", "만큼도", "대로는", "대로도",
-		"이라도", "이라든지", "이라든가", "이라면", "이라서", "이랑은", "이랑도",
-		"라든지", "라든가", "라도", "라면", "라서",
-		"에서는", "에서", "에게", "한테", "께", "부터", "까지", "밖에", "보다", "처럼",
-		"같이", "만큼", "대로", "뿐만", "뿐은", "뿐도", "뿐",
-		"으로", "이나", "이나마", "이든", "이든지", "이든가", "이야", "이랑", "이며", "이고",
-		"든지", "든가", "든", "야", "랑", "은", "는", "이", "가", "을", "를", "와", "과",
-		"도", "만", "의", "에", "로"
+		"으로부터", "에게서", "한테서",
+		"이라든지", "라든지", "이라든가", "라든가", "이든지", "이든가",
+		"으로", "에서", "에게", "한테", "부터", "까지", "밖에", "보다", "처럼",
+		"같이", "만큼", "대로", "이나마", "이라도", "이라면", "이라서", "이든",
+		"이랑", "이며", "이고", "라도", "라면", "라서", "든지", "든가",
+		"께서", "이나", "든", "야", "랑", "께", "은", "는", "이", "가", "을", "를",
+		"와", "과", "도", "만", "의", "에", "로"
 	);
 
 	private KoreanParticleNormalizer() {
 	}
 
 	/**
-	 * 단어 끝에서 조사 후보를 반복적으로 제거하고, 비교용 단어와 화면 표시용 단어를 함께 반환합니다.
+	 * 단어 끝에 붙은 가장 마지막 조사 후보 하나만 제거하고, 비교용 단어와 화면 표시용 단어를 함께 반환합니다.
 	 */
-	static NormalizedWord normalize(String word) {
-		String normalized = word;
-
-		if (PROTECTED_WORDS.contains(normalized)) {
-			return new NormalizedWord(normalized, normalized);
-		}
-
-		for (int index = 0; index < 3; index++) {
-			String stripped = stripOneParticle(normalized);
-
-			if (stripped.equals(normalized)) {
-				break;
-			}
-
-			normalized = stripped;
-		}
+	static NormalizedWord normalize(String word, boolean stripParticle) {
+		String normalized = stripParticle ? stripOneParticle(word) : word;
 
 		return new NormalizedWord(normalized, normalized);
 	}
 
 	/**
-	 * 가장 긴 조사 후보부터 검사해 단어 끝에 붙은 조사 하나를 제거합니다.
+	 * 단어 끝에 붙은 조사 후보 하나를 찾습니다. 긴 조사를 먼저 검사해 `부터`, `까지` 같은 조사를 우선합니다.
 	 */
-	private static String stripOneParticle(String word) {
+	static ParticleMatch findEndingParticle(String word) {
 		if (PROTECTED_WORDS.contains(word)) {
-			return word;
+			return null;
 		}
 
 		for (String particle : PARTICLES) {
@@ -72,11 +56,24 @@ final class KoreanParticleNormalizer {
 			String stem = word.substring(0, word.length() - particle.length());
 
 			if (canUseStem(stem)) {
-				return stem;
+				return new ParticleMatch(stem, particle, CONTEXT_REQUIRED_PARTICLES.contains(particle));
 			}
 		}
 
-		return word;
+		return null;
+	}
+
+	/**
+	 * 가장 긴 조사 후보부터 검사해 단어 끝에 붙은 조사 하나를 제거합니다.
+	 */
+	private static String stripOneParticle(String word) {
+		ParticleMatch particleMatch = findEndingParticle(word);
+
+		if (particleMatch == null) {
+			return word;
+		}
+
+		return particleMatch.stem();
 	}
 
 	/**
@@ -93,6 +90,16 @@ final class KoreanParticleNormalizer {
 	record NormalizedWord(
 		String normalizedWord,
 		String displayWord
+	) {
+	}
+
+	/**
+	 * 단어 끝에서 발견한 조사 후보와 제거 후 남는 어간입니다.
+	 */
+	record ParticleMatch(
+		String stem,
+		String particle,
+		boolean requiresContext
 	) {
 	}
 }

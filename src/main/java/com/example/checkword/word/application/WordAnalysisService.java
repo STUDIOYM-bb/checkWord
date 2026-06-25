@@ -8,10 +8,13 @@ import org.springframework.stereotype.Service;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 입력된 글에서 반복 단어를 찾고, 하이라이트에 필요한 색상과 위치 정보를 계산하는 서비스입니다.
@@ -39,13 +42,14 @@ public class WordAnalysisService {
 	 */
 	public WordAnalysisResult analyze(String text) {
 		String safeText = text == null ? "" : text;
-		List<ParsedWord> parsedWords = parseWords(safeText);
+		List<RawParsedWord> rawWords = parseWords(safeText);
+		List<ParsedWord> parsedWords = normalizeWords(rawWords);
 		Map<String, List<ParsedWord>> groupedWords = groupByNormalizedWord(parsedWords);
 		List<RepeatedWord> repeatedWords = createRepeatedWords(groupedWords);
 
 		return new WordAnalysisResult(
 			safeText,
-			parsedWords.size(),
+			rawWords.size(),
 			repeatedWords.size(),
 			repeatedWords
 		);
@@ -54,8 +58,8 @@ public class WordAnalysisService {
 	/**
 	 * 유니코드 문자와 숫자로 이어진 구간만 단어로 보고, 한 글자 단어는 제외합니다.
 	 */
-	private List<ParsedWord> parseWords(String text) {
-		List<ParsedWord> words = new ArrayList<>();
+	private List<RawParsedWord> parseWords(String text) {
+		List<RawParsedWord> words = new ArrayList<>();
 		int wordStart = -1;
 
 		for (int index = 0; index < text.length(); ) {
@@ -84,16 +88,12 @@ public class WordAnalysisService {
 	/**
 	 * 원문 구간의 글자 수가 2글자 이상이면 분석 대상 단어로 추가합니다.
 	 */
-	private void addWordIfValid(String text, int startIndex, int endIndex, List<ParsedWord> words) {
+	private void addWordIfValid(String text, int startIndex, int endIndex, List<RawParsedWord> words) {
 		String originalWord = text.substring(startIndex, endIndex);
 		int codePointLength = originalWord.codePointCount(0, originalWord.length());
 
 		if (codePointLength >= MIN_WORD_CODE_POINT_LENGTH) {
-			KoreanParticleNormalizer.NormalizedWord normalizedWord = normalizeWord(originalWord);
-
-			words.add(new ParsedWord(
-				normalizedWord.normalizedWord(),
-				normalizedWord.displayWord(),
+			words.add(new RawParsedWord(
 				originalWord,
 				new WordOccurrence(startIndex, endIndex, originalWord)
 			));
@@ -101,18 +101,74 @@ public class WordAnalysisService {
 	}
 
 	/**
-	 * 영어 대소문자, 유니코드 표현 차이, 한국어 조사 차이를 줄여 반복 비교 기준 단어를 만듭니다.
+	 * 전체 단어 목록의 관계를 보고 한국어 조사 제거 여부를 결정한 뒤 비교용 단어를 만듭니다.
 	 */
-	private KoreanParticleNormalizer.NormalizedWord normalizeWord(String word) {
-		String normalizedWord = Normalizer.normalize(word, Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
-		String displayWord = Normalizer.normalize(word, Normalizer.Form.NFC);
-		KoreanParticleNormalizer.NormalizedWord normalizedResult = KoreanParticleNormalizer.normalize(normalizedWord);
-		KoreanParticleNormalizer.NormalizedWord displayResult = KoreanParticleNormalizer.normalize(displayWord);
+	private List<ParsedWord> normalizeWords(List<RawParsedWord> rawWords) {
+		Set<String> rawNormalizedWords = new HashSet<>();
+		Map<String, Set<String>> stemToSurfaceWords = new HashMap<>();
 
-		return new KoreanParticleNormalizer.NormalizedWord(
-			normalizedResult.normalizedWord(),
-			displayResult.displayWord()
-		);
+		for (RawParsedWord rawWord : rawWords) {
+			String normalizedWord = normalizeForComparison(rawWord.originalWord());
+			KoreanParticleNormalizer.ParticleMatch particleMatch = KoreanParticleNormalizer.findEndingParticle(normalizedWord);
+
+			rawNormalizedWords.add(normalizedWord);
+
+			if (particleMatch != null) {
+				stemToSurfaceWords.computeIfAbsent(particleMatch.stem(), ignored -> new HashSet<>())
+					.add(normalizedWord);
+			}
+		}
+
+		List<ParsedWord> parsedWords = new ArrayList<>();
+
+		for (RawParsedWord rawWord : rawWords) {
+			String normalizedWord = normalizeForComparison(rawWord.originalWord());
+			String displayWord = Normalizer.normalize(rawWord.originalWord(), Normalizer.Form.NFC);
+			boolean stripParticle = shouldStripParticle(normalizedWord, rawNormalizedWords, stemToSurfaceWords);
+			KoreanParticleNormalizer.NormalizedWord normalizedResult = KoreanParticleNormalizer.normalize(normalizedWord, stripParticle);
+			KoreanParticleNormalizer.NormalizedWord displayResult = KoreanParticleNormalizer.normalize(displayWord, stripParticle);
+
+			parsedWords.add(new ParsedWord(
+				normalizedResult.normalizedWord(),
+				displayResult.displayWord(),
+				rawWord.originalWord(),
+				rawWord.occurrence()
+			));
+		}
+
+		return parsedWords;
+	}
+
+	/**
+	 * 영어 대소문자와 유니코드 표현 차이를 줄여 조사 판정과 반복 비교에 사용할 기본 단어를 만듭니다.
+	 */
+	private String normalizeForComparison(String word) {
+		return Normalizer.normalize(word, Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * 짧은 조사가 단어 일부일 수 있으면 다른 단어 형태와 연결될 때만 제거합니다.
+	 */
+	private boolean shouldStripParticle(
+		String normalizedWord,
+		Set<String> rawNormalizedWords,
+		Map<String, Set<String>> stemToSurfaceWords
+	) {
+		KoreanParticleNormalizer.ParticleMatch particleMatch = KoreanParticleNormalizer.findEndingParticle(normalizedWord);
+
+		if (particleMatch == null) {
+			return false;
+		}
+
+		if (!particleMatch.requiresContext()) {
+			return true;
+		}
+
+		if (rawNormalizedWords.contains(particleMatch.stem())) {
+			return true;
+		}
+
+		return stemToSurfaceWords.getOrDefault(particleMatch.stem(), Set.of()).size() > 1;
 	}
 
 	/**
@@ -169,6 +225,15 @@ public class WordAnalysisService {
 	private record ParsedWord(
 		String normalizedWord,
 		String displayWord,
+		String originalWord,
+		WordOccurrence occurrence
+	) {
+	}
+
+	/**
+	 * 원문에서 추출한 뒤 아직 조사 정규화를 적용하지 않은 단어 정보입니다.
+	 */
+	private record RawParsedWord(
 		String originalWord,
 		WordOccurrence occurrence
 	) {

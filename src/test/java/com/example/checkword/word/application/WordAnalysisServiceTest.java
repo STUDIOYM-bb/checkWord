@@ -83,4 +83,34 @@ class WordAnalysisServiceTest {
 		assertEquals(2, repeatedWords.get("을지로").count());
 		assertFalse(repeatedWords.containsKey("을지"));
 	}
+
+	@Test
+	void analyzeStripsOnlyOneParticleFromTheEndOfEachWord() {
+		String text = "골뱅이 골뱅이는 고양이";
+
+		WordAnalysisResult result = wordAnalysisService.analyze(text);
+
+		Map<String, RepeatedWord> repeatedWords = result.repeatedWords()
+			.stream()
+			.collect(Collectors.toMap(RepeatedWord::normalizedWord, repeatedWord -> repeatedWord));
+
+		assertEquals(1, result.repeatedWordTypeCount());
+		assertEquals(2, repeatedWords.get("골뱅이").count());
+		assertEquals("골뱅이", repeatedWords.get("골뱅이").displayWord());
+		assertFalse(repeatedWords.containsKey("골뱅"));
+	}
+
+	@Test
+	void analyzeSupportsMultiSyllableParticlesAsOneEndingParticle() {
+		String text = "학교 학교부터 학교까지";
+
+		WordAnalysisResult result = wordAnalysisService.analyze(text);
+
+		Map<String, RepeatedWord> repeatedWords = result.repeatedWords()
+			.stream()
+			.collect(Collectors.toMap(RepeatedWord::normalizedWord, repeatedWord -> repeatedWord));
+
+		assertEquals(1, result.repeatedWordTypeCount());
+		assertEquals(3, repeatedWords.get("학교").count());
+	}
 }
