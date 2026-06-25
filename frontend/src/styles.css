@@ -174,12 +174,23 @@ textarea {
   line-height: 1.75;
 }
 
-mark {
+.highlight-token {
+  display: inline;
   margin: 0 1px;
   padding: 1px 4px;
   border: 1px solid;
   color: #101828;
+  appearance: none;
   font-weight: 800;
+  line-height: inherit;
+  text-align: inherit;
+  white-space: inherit;
+}
+
+.highlight-token:hover,
+.highlight-token:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 1px;
 }
 
 .error-message {
@@ -235,10 +246,25 @@ mark {
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 72px;
   padding: 14px;
   border: 1px solid #e1e7ef;
   background: #fbfcfe;
+  color: inherit;
+  text-align: left;
+}
+
+.word-item:hover,
+.word-item:focus-visible,
+.word-item.is-selected {
+  border-color: #111827;
+  background: #f3f6fa;
+}
+
+.word-item:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
 }
 
 .color-swatch {

@@ -10,10 +10,6 @@ final class KoreanParticleNormalizer {
 
 	private static final int MIN_STEM_CODE_POINT_LENGTH = 2;
 
-	private static final Set<String> PROTECTED_WORDS = Set.of(
-		"을지로"
-	);
-
 	private static final Set<String> CONTEXT_REQUIRED_PARTICLES = Set.of(
 		"이", "가", "의", "에", "로", "도", "만"
 	);
@@ -44,10 +40,6 @@ final class KoreanParticleNormalizer {
 	 * 단어 끝에 붙은 조사 후보 하나를 찾습니다. 긴 조사를 먼저 검사해 `부터`, `까지` 같은 조사를 우선합니다.
 	 */
 	static ParticleMatch findEndingParticle(String word) {
-		if (PROTECTED_WORDS.contains(word)) {
-			return null;
-		}
-
 		for (String particle : PARTICLES) {
 			if (!word.endsWith(particle)) {
 				continue;

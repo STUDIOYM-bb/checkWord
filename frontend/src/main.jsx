@@ -33,6 +33,7 @@ function flattenOccurrences(repeatedWords) {
     .flatMap((word) =>
       word.occurrences.map((occurrence) => ({
         ...occurrence,
+        normalizedWord: word.normalizedWord,
         color: word.color,
         label: word.displayWord,
       })),
@@ -43,7 +44,7 @@ function flattenOccurrences(repeatedWords) {
 /**
  * 원문과 반복 단어 위치를 받아 일반 텍스트 조각과 하이라이트 조각으로 분리합니다.
  */
-function buildHighlightedSegments(text, repeatedWords) {
+function buildHighlightedSegments(text, repeatedWords, selectedWord) {
   const occurrences = flattenOccurrences(repeatedWords);
   const segments = [];
   let cursor = 0;
@@ -57,13 +58,25 @@ function buildHighlightedSegments(text, repeatedWords) {
       });
     }
 
-    segments.push({
-      key: `highlight-${occurrence.startIndex}-${occurrence.endIndex}-${index}`,
-      text: text.slice(occurrence.startIndex, occurrence.endIndex),
-      highlighted: true,
-      color: occurrence.color,
-      label: occurrence.label,
-    });
+    const segmentText = text.slice(occurrence.startIndex, occurrence.endIndex);
+    const isSelected = selectedWord === null || selectedWord === occurrence.normalizedWord;
+
+    if (isSelected) {
+      segments.push({
+        key: `highlight-${occurrence.startIndex}-${occurrence.endIndex}-${index}`,
+        text: segmentText,
+        highlighted: true,
+        normalizedWord: occurrence.normalizedWord,
+        color: occurrence.color,
+        label: occurrence.label,
+      });
+    } else {
+      segments.push({
+        key: `plain-highlight-${occurrence.startIndex}-${occurrence.endIndex}-${index}`,
+        text: segmentText,
+        highlighted: false,
+      });
+    }
 
     cursor = occurrence.endIndex;
   });
@@ -94,10 +107,11 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedWord, setSelectedWord] = useState(null);
 
   const segments = useMemo(
-    () => buildHighlightedSegments(analysis?.text ?? text, analysis?.repeatedWords ?? []),
-    [analysis, text],
+    () => buildHighlightedSegments(analysis?.text ?? text, analysis?.repeatedWords ?? [], selectedWord),
+    [analysis, selectedWord, text],
   );
 
   const textStats = useMemo(() => {
@@ -113,11 +127,18 @@ function App() {
     try {
       const result = await analyzeText(targetText);
       setAnalysis(result);
+      setSelectedWord((currentWord) =>
+        result.repeatedWords.some((word) => word.normalizedWord === currentWord) ? currentWord : null,
+      );
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const toggleSelectedWord = useCallback((normalizedWord) => {
+    setSelectedWord((currentWord) => (currentWord === normalizedWord ? null : normalizedWord));
   }, []);
 
   useEffect(() => {
@@ -183,16 +204,19 @@ function App() {
           <div className="highlight-view" aria-label="반복 단어 하이라이트 결과">
             {segments.map((segment) =>
               segment.highlighted ? (
-                <mark
+                <button
                   key={segment.key}
+                  className="highlight-token"
+                  type="button"
                   title={segment.label}
+                  onClick={() => toggleSelectedWord(segment.normalizedWord)}
                   style={{
                     borderColor: segment.color,
                     backgroundColor: toSoftBackground(segment.color),
                   }}
                 >
                   {segment.text}
-                </mark>
+                </button>
               ) : (
                 <React.Fragment key={segment.key}>{segment.text}</React.Fragment>
               ),
@@ -224,14 +248,20 @@ function App() {
         <div className="word-list">
           {(analysis?.repeatedWords ?? []).length > 0 ? (
             analysis.repeatedWords.map((word) => (
-              <article className="word-item" key={word.normalizedWord}>
+              <button
+                className={`word-item${selectedWord === word.normalizedWord ? ' is-selected' : ''}`}
+                key={word.normalizedWord}
+                type="button"
+                onClick={() => toggleSelectedWord(word.normalizedWord)}
+                aria-pressed={selectedWord === word.normalizedWord}
+              >
                 <span className="color-swatch" style={{ backgroundColor: word.color }} aria-hidden="true" />
                 <div>
                   <h3>{word.displayWord}</h3>
                   <p>{word.normalizedWord}</p>
                 </div>
                 <strong>{word.count}회</strong>
-              </article>
+              </button>
             ))
           ) : (
             <p className="empty-state">2회 이상 반복된 단어가 없습니다.</p>

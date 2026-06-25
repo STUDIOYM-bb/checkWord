@@ -5,6 +5,7 @@ import com.example.checkword.word.domain.WordAnalysisResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,8 +71,8 @@ class WordAnalysisServiceTest {
 	}
 
 	@Test
-	void analyzeDoesNotStripParticleTextFromInsideProtectedNouns() {
-		String text = "을지로 을지로를 을지";
+	void analyzeDoesNotStripParticleTextFromInsideNouns() {
+		String text = "을지로 을지로를";
 
 		WordAnalysisResult result = wordAnalysisService.analyze(text);
 
@@ -112,5 +113,24 @@ class WordAnalysisServiceTest {
 
 		assertEquals(1, result.repeatedWordTypeCount());
 		assertEquals(3, repeatedWords.get("학교").count());
+	}
+
+	@Test
+	void analyzeGeneratesUniqueColorsForEveryRepeatedWord() {
+		String text = """
+			단어01 단어01 단어02 단어02 단어03 단어03 단어04 단어04 단어05 단어05
+			단어06 단어06 단어07 단어07 단어08 단어08 단어09 단어09 단어10 단어10
+			단어11 단어11 단어12 단어12 단어13 단어13 단어14 단어14 단어15 단어15
+			""";
+
+		WordAnalysisResult result = wordAnalysisService.analyze(text);
+		Set<String> colors = result.repeatedWords()
+			.stream()
+			.map(RepeatedWord::color)
+			.collect(Collectors.toSet());
+
+		assertEquals(15, result.repeatedWordTypeCount());
+		assertEquals(result.repeatedWords().size(), colors.size());
+		assertTrue(colors.stream().allMatch(color -> color.matches("^#[0-9A-F]{6}$")));
 	}
 }

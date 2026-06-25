@@ -24,18 +24,11 @@ public class WordAnalysisService {
 
 	private static final int MIN_WORD_CODE_POINT_LENGTH = 2;
 
-	private static final String[] HIGHLIGHT_COLORS = {
-		"#F97316",
-		"#2563EB",
-		"#16A34A",
-		"#DC2626",
-		"#9333EA",
-		"#0D9488",
-		"#DB2777",
-		"#CA8A04",
-		"#4F46E5",
-		"#059669"
-	};
+	private static final double GOLDEN_ANGLE = 137.508;
+
+	private static final int[] COLOR_SATURATIONS = {68, 72, 76, 80, 64};
+
+	private static final int[] COLOR_LIGHTNESSES = {36, 40, 44, 48, 52};
 
 	/**
 	 * 공백과 특수문자를 구분자로 삼아 단어를 추출하고, 2회 이상 반복된 단어만 반환합니다.
@@ -198,6 +191,7 @@ public class WordAnalysisService {
 			.toList();
 
 		List<RepeatedWord> repeatedWords = new ArrayList<>();
+		Set<String> usedColors = new HashSet<>();
 
 		for (int index = 0; index < repeatedEntries.size(); index++) {
 			Map.Entry<String, List<ParsedWord>> entry = repeatedEntries.get(index);
@@ -211,12 +205,80 @@ public class WordAnalysisService {
 				entry.getKey(),
 				displayWord,
 				words.size(),
-				HIGHLIGHT_COLORS[index % HIGHLIGHT_COLORS.length],
+				createUniqueColor(entry.getKey(), index, usedColors),
 				occurrences
 			));
 		}
 
 		return repeatedWords;
+	}
+
+	/**
+	 * 단어 문자열을 기반으로 난수처럼 보이는 색상을 만들고, 같은 응답 안에서는 중복 색상을 피합니다.
+	 */
+	private String createUniqueColor(String normalizedWord, int index, Set<String> usedColors) {
+		int seed = Math.floorMod(normalizedWord.hashCode(), 360);
+
+		for (int attempt = 0; attempt < 720; attempt++) {
+			double hue = Math.floorMod((int) Math.round(seed + ((index + attempt) * GOLDEN_ANGLE)), 360);
+			int saturation = COLOR_SATURATIONS[Math.floorMod(seed + attempt, COLOR_SATURATIONS.length)];
+			int lightness = COLOR_LIGHTNESSES[Math.floorMod((seed / 7) + attempt, COLOR_LIGHTNESSES.length)];
+			String color = hslToHex(hue, saturation, lightness);
+
+			if (usedColors.add(color)) {
+				return color;
+			}
+		}
+
+		throw new IllegalStateException("사용 가능한 고유 색상을 생성하지 못했습니다.");
+	}
+
+	/**
+	 * CSS에서 바로 사용할 수 있도록 HSL 색상값을 HEX 문자열로 변환합니다.
+	 */
+	private String hslToHex(double hue, int saturationPercent, int lightnessPercent) {
+		double saturation = saturationPercent / 100.0;
+		double lightness = lightnessPercent / 100.0;
+		double chroma = (1 - Math.abs((2 * lightness) - 1)) * saturation;
+		double huePrime = hue / 60.0;
+		double x = chroma * (1 - Math.abs((huePrime % 2) - 1));
+		double red = 0;
+		double green = 0;
+		double blue = 0;
+
+		if (huePrime < 1) {
+			red = chroma;
+			green = x;
+		} else if (huePrime < 2) {
+			red = x;
+			green = chroma;
+		} else if (huePrime < 3) {
+			green = chroma;
+			blue = x;
+		} else if (huePrime < 4) {
+			green = x;
+			blue = chroma;
+		} else if (huePrime < 5) {
+			red = x;
+			blue = chroma;
+		} else {
+			red = chroma;
+			blue = x;
+		}
+
+		double match = lightness - (chroma / 2);
+		int redValue = toRgbValue(red + match);
+		int greenValue = toRgbValue(green + match);
+		int blueValue = toRgbValue(blue + match);
+
+		return String.format("#%02X%02X%02X", redValue, greenValue, blueValue);
+	}
+
+	/**
+	 * 0.0부터 1.0 사이의 색상 채널 값을 0부터 255 사이의 RGB 정수로 변환합니다.
+	 */
+	private int toRgbValue(double channel) {
+		return Math.max(0, Math.min(255, (int) Math.round(channel * 255)));
 	}
 
 	/**
